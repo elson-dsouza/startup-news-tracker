@@ -6,6 +6,7 @@ pydantic==2.13.4
 pydantic-settings==2.14.1
 httpx==0.28.1
 feedparser==6.0.12
+PyYAML==6.0.2
 alembic==1.11.1
 pytest==9.0.3
 pytest-asyncio==1.4.0

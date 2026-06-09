@@ -64,12 +64,14 @@ export default function DashboardPage() {
   const [sourceOptions, setSourceOptions] = useState<ArticleSource[]>([]);
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
-  const [source, setSource] = useState("all");
+  const [selectedSources, setSelectedSources] = useState<string[]>([]);
+  const [isSourceDropdownOpen, setIsSourceDropdownOpen] = useState(false);
   const [status, setStatus] = useState<"loading" | "live" | "error">("loading");
   const [offset, setOffset] = useState(0);
   const [hasMoreArticles, setHasMoreArticles] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
+  const sourceDropdownRef = useRef<HTMLDivElement | null>(null);
 
   const sourceCounts = useMemo(() => countBySource(articles), [articles]);
   const sourceLabels = useMemo(
@@ -90,6 +92,26 @@ export default function DashboardPage() {
   function sourceLabel(sourceId: string) {
     return sourceLabels.get(sourceId) ?? fallbackSourceLabel(sourceId);
   }
+
+  function toggleSource(sourceId: string) {
+    setSelectedSources((currentSources) =>
+      currentSources.includes(sourceId)
+        ? currentSources.filter((item) => item !== sourceId)
+        : [...currentSources, sourceId]
+    );
+  }
+
+  const selectedSourceSummary = useMemo(() => {
+    if (selectedSources.length === 0) {
+      return "All sources";
+    }
+
+    if (selectedSources.length === 1) {
+      return sourceLabel(selectedSources[0]);
+    }
+
+    return `${selectedSources.length} sources selected`;
+  }, [selectedSources, sourceLabels]);
 
   const topSource = useMemo(
     () => [...sourceCounts.entries()].sort((a, b) => b[1] - a[1])[0],
@@ -124,8 +146,8 @@ export default function DashboardPage() {
         limit: String(PAGE_SIZE),
         offset: String(nextOffset)
       });
-      if (source !== "all") {
-        params.set("source", source);
+      for (const sourceId of selectedSources) {
+        params.append("source", sourceId);
       }
       if (debouncedQuery.trim()) {
         params.set("q", debouncedQuery.trim());
@@ -156,7 +178,7 @@ export default function DashboardPage() {
       setStatus("live");
       setIsLoadingMore(false);
     },
-    [debouncedQuery, source]
+    [debouncedQuery, selectedSources]
   );
 
   async function fetchSources() {
@@ -182,6 +204,21 @@ export default function DashboardPage() {
 
   useEffect(() => {
     fetchSources().catch(() => setStatus("error"));
+  }, []);
+
+  useEffect(() => {
+    function handlePointerDown(event: PointerEvent) {
+      if (
+        sourceDropdownRef.current &&
+        !sourceDropdownRef.current.contains(event.target as Node)
+      ) {
+        setIsSourceDropdownOpen(false);
+      }
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown);
+
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
   }, []);
 
   useEffect(() => {
@@ -310,19 +347,46 @@ export default function DashboardPage() {
               />
             </div>
             <div className="controlGroup">
-              <label htmlFor="sourceFilter">Source</label>
-              <select
-                id="sourceFilter"
-                value={source}
-                onChange={(event) => setSource(event.target.value)}
-              >
-                <option value="all">All sources</option>
-                {enabledSources.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {sourceLabel(item.id)}
-                  </option>
-                ))}
-              </select>
+              <label htmlFor="sourceFilter">Sources</label>
+              <div className="sourceDropdown" ref={sourceDropdownRef}>
+                <button
+                  aria-expanded={isSourceDropdownOpen}
+                  aria-haspopup="listbox"
+                  className="sourceDropdownButton"
+                  id="sourceFilter"
+                  type="button"
+                  onClick={() => setIsSourceDropdownOpen((isOpen) => !isOpen)}
+                >
+                  <span>{selectedSourceSummary}</span>
+                  <span aria-hidden="true">▾</span>
+                </button>
+                {isSourceDropdownOpen && (
+                  <div
+                    aria-labelledby="sourceFilter"
+                    className="sourceDropdownPanel"
+                    role="listbox"
+                  >
+                    <label className="sourceOption">
+                      <input
+                        checked={selectedSources.length === 0}
+                        type="checkbox"
+                        onChange={() => setSelectedSources([])}
+                      />
+                      <span>All sources</span>
+                    </label>
+                    {enabledSources.map((item) => (
+                      <label className="sourceOption" key={item.id}>
+                        <input
+                          checked={selectedSources.includes(item.id)}
+                          type="checkbox"
+                          onChange={() => toggleSource(item.id)}
+                        />
+                        <span>{sourceLabel(item.id)}</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
             <button
               className="iconButton"
@@ -333,25 +397,6 @@ export default function DashboardPage() {
             >
               <span aria-hidden="true">↻</span>
             </button>
-          </div>
-          <div className="sourceChips" aria-label="Source filters">
-            <button
-              className={`sourceChip ${source === "all" ? "active" : ""}`}
-              type="button"
-              onClick={() => setSource("all")}
-            >
-              All
-            </button>
-            {enabledSources.map((item) => (
-              <button
-                className={`sourceChip ${source === item.id ? "active" : ""}`}
-                key={item.id}
-                type="button"
-                onClick={() => setSource(item.id)}
-              >
-                {sourceLabel(item.id)}
-              </button>
-            ))}
           </div>
 
           <div className="contentGrid">

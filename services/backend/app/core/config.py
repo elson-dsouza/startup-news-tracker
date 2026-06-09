@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     enabled_sources: str = ""
     source_timeout_seconds: float = 30.0
     source_user_agent: str = "StartupNewsTracker/1.0 (+https://localhost)"
+    google_news_queries_path: str = "app/ingestion/config/google_news.yaml"
 
     @property
     def allowed_cors_origins(self) -> list[str]:

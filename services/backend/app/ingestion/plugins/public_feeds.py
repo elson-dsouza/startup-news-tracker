@@ -71,8 +71,8 @@ class PublicFeedPlugin(SourcePlugin):
         ) as client:
             for feed_url in self.feed_urls:
                 articles.extend(await self._fetch_feed(client, feed_url))
-            for listing_url in self.listing_urls:
-                articles.extend(await self._fetch_listing(client, listing_url))
+            # for listing_url in self.listing_urls:
+            #     articles.extend(await self._fetch_listing(client, listing_url))
 
         return self._deduplicate(articles)
 

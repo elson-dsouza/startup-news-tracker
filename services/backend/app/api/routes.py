@@ -1,5 +1,6 @@
 from datetime import datetime
 from uuid import UUID
+import re
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, or_, select
@@ -17,7 +18,7 @@ router = APIRouter(prefix="/articles", tags=["articles"])
 async def list_articles(
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
-    source: str | None = Query(default=None),
+    source: list[str] | None = Query(default=None),
     q: str | None = Query(default=None, min_length=1),
     published_after: datetime | None = Query(default=None),
     published_before: datetime | None = Query(default=None),
@@ -25,7 +26,7 @@ async def list_articles(
 ) -> list[ArticleRead]:
     statement = select(Article)
     if source:
-        statement = statement.where(Article.source == source)
+        statement = statement.where(Article.source.in_(source))
     if q:
         term = f"%{q.strip()}%"
         statement = statement.where(
@@ -54,14 +55,32 @@ async def list_article_sources(
     )
     latest_by_source = {row[0]: row[1] for row in result.fetchall()}
 
+    source_metadata = {
+        str(source["id"]): {
+            "display_name": str(source["display_name"]),
+            "enabled": bool(source["enabled"]),
+        }
+        for source in IngestionService.source_metadata()
+    }
+    for source_id in latest_by_source:
+        source_metadata.setdefault(
+            source_id,
+            {
+                "display_name": _source_display_name(source_id),
+                "enabled": True,
+            },
+        )
+
     return [
         ArticleSourceRead(
-            id=str(source["id"]),
-            display_name=str(source["display_name"]),
-            enabled=bool(source["enabled"]),
-            latest_article_at=latest_by_source.get(str(source["id"])),
+            id=source_id,
+            display_name=str(metadata["display_name"]),
+            enabled=bool(metadata["enabled"]),
+            latest_article_at=latest_by_source.get(source_id),
         )
-        for source in IngestionService.source_metadata()
+        for source_id, metadata in sorted(
+            source_metadata.items(), key=lambda item: str(item[1]["display_name"])
+        )
     ]
 
 
@@ -74,3 +93,9 @@ async def get_article(
     if article is None:
         raise HTTPException(status_code=404, detail="Article not found")
     return article
+
+
+def _source_display_name(source_id: str) -> str:
+    return " ".join(
+        part.capitalize() for part in re.split(r"[_\s]+", source_id) if part
+    )

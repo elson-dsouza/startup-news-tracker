@@ -1,0 +1,15 @@
+sources:
+  google_news_funding:
+    queries:
+      - government healthcare funding
+      - healthcare funding india
+      - health innovation funding
+      - WHO grant
+      - United Nations healthcare funding
+      - seed funding india
+  google_news_venture_capital:
+    queries:
+      - venture capital healthcare india
+      - seed funding healthcare india
+      - digital health innovation challenge
+      - series funding healthcare

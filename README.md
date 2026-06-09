@@ -17,6 +17,7 @@ The project is split into two application services plus shared root scripts:
 ## Current Capabilities
 
 - Ingests Google News RSS results for `india startup funding`.
+- Loads Google News RSS search queries from a small YAML config file.
 - Uses a plugin interface so additional article sources can be added without changing ingestion orchestration.
 - Deduplicates articles by URL before writing to the database.
 - Stores article source, title, URL, published timestamp, feed content, and creation timestamp.
@@ -100,11 +101,13 @@ CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
 ENABLED_SOURCES=
 SOURCE_TIMEOUT_SECONDS=30
 SOURCE_USER_AGENT=StartupNewsTracker/1.0 (+https://localhost)
+GOOGLE_NEWS_QUERIES_PATH=app/ingestion/config/google_news.yaml
 NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
 ```
 
 Docker Compose overrides the backend database host to `postgres` for containers.
 Leave `ENABLED_SOURCES` empty to run all public source plugins, or set a comma-separated list such as `google_news_funding,entrackr_funding`.
+Add or remove Google News search terms in `services/backend/app/ingestion/config/google_news.yaml`; the ingester reads the file when each backend process starts. Override `GOOGLE_NEWS_QUERIES_PATH` when a deployment needs a different config file.
 
 ## Run The Full Project
 
@@ -167,6 +170,19 @@ Current public source plugins:
 - `inc42_india_funding`
 - `yourstory_startup_funding`
 - `vccircle_startup_funding`
+
+Google News query configuration:
+
+```yaml
+sources:
+  google_news_funding:
+    queries:
+      - india startup funding
+      - indian startup raises funding
+  google_news_venture_capital:
+    queries:
+      - india startup venture funding
+```
 
 ## REST API
 

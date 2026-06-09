@@ -16,6 +16,12 @@ from app.models.article import Article
 logger = logging.getLogger(__name__)
 
 
+MAX_SOURCE_LENGTH = 255
+MAX_TITLE_LENGTH = 1024
+MAX_URL_LENGTH = 2048
+MAX_EXTERNAL_ID_LENGTH = 512
+
+
 class IngestionService:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
@@ -72,20 +78,26 @@ class IngestionService:
     def _prepare_articles(cls, raw_articles: Iterable[RawArticle]) -> List[RawArticle]:
         prepared: List[RawArticle] = []
         for article in raw_articles:
-            title = article.title.strip()
-            url = cls._normalize_url(article.url)
+            title = cls._truncate(article.title.strip(), MAX_TITLE_LENGTH)
+            url = cls._truncate(cls._normalize_url(article.url), MAX_URL_LENGTH)
             if not title or not url:
                 continue
 
             source_url = article.source_url
             if article.url and article.url != url and not source_url:
                 source_url = article.url
+            if source_url:
+                source_url = cls._truncate(source_url.strip(), MAX_URL_LENGTH)
 
             prepared.append(
                 replace(
                     article,
+                    source=cls._truncate(article.source.strip(), MAX_SOURCE_LENGTH),
                     title=title,
                     url=url,
+                    external_id=cls._truncate_optional(
+                        article.external_id, MAX_EXTERNAL_ID_LENGTH
+                    ),
                     source_url=source_url,
                 )
             )
@@ -172,3 +184,15 @@ class IngestionService:
                 "",
             )
         )
+
+    @staticmethod
+    def _truncate(value: str, max_length: int) -> str:
+        return value[:max_length]
+
+    @classmethod
+    def _truncate_optional(cls, value: str | None, max_length: int) -> str | None:
+        if value is None:
+            return None
+
+        cleaned = value.strip()
+        return cls._truncate(cleaned, max_length) if cleaned else None

@@ -68,7 +68,7 @@ FastAPI backend
 PostgreSQL articles table
 ```
 
-The dashboard fetches source metadata from the backend and fetches articles in pages of 20. Source and search filters are sent to the backend with `source` and `q` query parameters. Scrolling near the end of the list requests the next page with `offset`; the Load More button remains available as a manual fallback. Source counts and summary metrics are calculated from the loaded article set.
+The dashboard fetches source metadata from the backend and fetches articles in pages of 20. Source and search filters are sent to the backend with repeated `source` and `q` query parameters. Scrolling near the end of the list requests the next page with `offset`; the Load More button remains available as a manual fallback. Source counts and summary metrics are calculated from the loaded article set.
 
 ## Main UI Areas
 
@@ -100,7 +100,7 @@ The metric strip summarizes:
 The toolbar contains:
 
 - Search input for backend title and content matching.
-- Source select filter backed by the article API.
+- Dropdown checkbox source filter backed by the article API.
 - Refresh button that resets pagination and re-fetches articles from the backend.
 
 ### Article List

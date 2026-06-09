@@ -145,7 +145,7 @@ Defines the plugin base class and registry. Subclasses register themselves throu
 
 ### `app/ingestion/plugins/google_news.py`
 
-Fetches Google News RSS search feeds for funding and venture-capital queries, parses them with `feedparser`, and maps entries into `RawArticle` objects.
+Fetches Google News RSS search feeds for funding and venture-capital queries, parses them with `feedparser`, and maps entries into `RawArticle` objects. Query lists are loaded from `app/ingestion/config/google_news.yaml` by default, with `GOOGLE_NEWS_QUERIES_PATH` available for environment-specific overrides.
 
 ### `app/ingestion/plugins/public_feeds.py`
 
