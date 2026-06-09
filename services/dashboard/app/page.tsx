@@ -1,18 +1,28 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type Article = {
   id: string;
   source: string;
   title: string;
   url: string;
+  external_id: string | null;
+  source_url: string | null;
   published_at: string | null;
   content: string | null;
   created_at: string;
 };
 
+type ArticleSource = {
+  id: string;
+  display_name: string;
+  enabled: boolean;
+  latest_article_at: string | null;
+};
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+const PAGE_SIZE = 20;
 
 function formatDate(value: string | null) {
   if (!value) {
@@ -25,7 +35,7 @@ function formatDate(value: string | null) {
   }).format(new Date(value));
 }
 
-function sourceLabel(source: string) {
+function fallbackSourceLabel(source: string) {
   return source
     .split("_")
     .filter(Boolean)
@@ -51,21 +61,35 @@ function countBySource(articles: Article[]) {
 
 export default function DashboardPage() {
   const [articles, setArticles] = useState<Article[]>([]);
+  const [sourceOptions, setSourceOptions] = useState<ArticleSource[]>([]);
   const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
   const [source, setSource] = useState("all");
   const [status, setStatus] = useState<"loading" | "live" | "error">("loading");
+  const [offset, setOffset] = useState(0);
+  const [hasMoreArticles, setHasMoreArticles] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
 
   const sourceCounts = useMemo(() => countBySource(articles), [articles]);
-  const sources = useMemo(() => [...sourceCounts.keys()].sort(), [sourceCounts]);
+  const sourceLabels = useMemo(
+    () =>
+      new Map(
+        sourceOptions.map((item) => [
+          item.id,
+          item.display_name || fallbackSourceLabel(item.id)
+        ])
+      ),
+    [sourceOptions]
+  );
+  const enabledSources = useMemo(
+    () => sourceOptions.filter((item) => item.enabled),
+    [sourceOptions]
+  );
 
-  const filteredArticles = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
-    return articles.filter((article) => {
-      const matchesSource = source === "all" || article.source === source;
-      const searchable = `${article.title} ${article.content ?? ""}`.toLowerCase();
-      return matchesSource && (!normalizedQuery || searchable.includes(normalizedQuery));
-    });
-  }, [articles, query, source]);
+  function sourceLabel(sourceId: string) {
+    return sourceLabels.get(sourceId) ?? fallbackSourceLabel(sourceId);
+  }
 
   const topSource = useMemo(
     () => [...sourceCounts.entries()].sort((a, b) => b[1] - a[1])[0],
@@ -77,25 +101,137 @@ export default function DashboardPage() {
     : 0;
   const maxSourceCount = Math.max(...[...sourceCounts.values()], 1);
 
-  async function fetchArticles() {
-    setStatus("loading");
-    try {
-      const response = await fetch(`${API_BASE_URL}/articles?limit=100`, {
-        cache: "no-store"
+  const fetchArticlePage = useCallback(
+    async ({
+      nextOffset,
+      reset = false,
+      signal
+    }: {
+      nextOffset: number;
+      reset?: boolean;
+      signal?: AbortSignal;
+    }) => {
+      if (reset) {
+        setStatus("loading");
+        setArticles([]);
+        setOffset(0);
+        setHasMoreArticles(true);
+      } else {
+        setIsLoadingMore(true);
+      }
+
+      const params = new URLSearchParams({
+        limit: String(PAGE_SIZE),
+        offset: String(nextOffset)
+      });
+      if (source !== "all") {
+        params.set("source", source);
+      }
+      if (debouncedQuery.trim()) {
+        params.set("q", debouncedQuery.trim());
+      }
+
+      const response = await fetch(`${API_BASE_URL}/articles?${params.toString()}`, {
+        cache: "no-store",
+        signal
       });
       if (!response.ok) {
         throw new Error(`Articles request failed with ${response.status}`);
       }
-      setArticles(await response.json());
+
+      const nextArticles = (await response.json()) as Article[];
+      setArticles((currentArticles) => {
+        if (reset) {
+          return nextArticles;
+        }
+
+        const seenIds = new Set(currentArticles.map((article) => article.id));
+        return [
+          ...currentArticles,
+          ...nextArticles.filter((article) => !seenIds.has(article.id))
+        ];
+      });
+      setOffset(nextOffset + nextArticles.length);
+      setHasMoreArticles(nextArticles.length === PAGE_SIZE);
+      setStatus("live");
+      setIsLoadingMore(false);
+    },
+    [debouncedQuery, source]
+  );
+
+  async function fetchSources() {
+    const response = await fetch(`${API_BASE_URL}/articles/sources`, {
+      cache: "no-store"
+    });
+    if (!response.ok) {
+      throw new Error(`Sources request failed with ${response.status}`);
+    }
+    setSourceOptions(await response.json());
+  }
+
+  async function refreshDashboard() {
+    setStatus("loading");
+    try {
+      await Promise.all([fetchSources(), fetchArticlePage({ nextOffset: 0, reset: true })]);
       setStatus("live");
     } catch {
       setStatus("error");
+      setIsLoadingMore(false);
     }
   }
 
   useEffect(() => {
-    fetchArticles();
+    fetchSources().catch(() => setStatus("error"));
   }, []);
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      setDebouncedQuery(query.trim());
+    }, 350);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [query]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    fetchArticlePage({
+      nextOffset: 0,
+      reset: true,
+      signal: controller.signal
+    }).catch((error) => {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        return;
+      }
+      setStatus("error");
+      setIsLoadingMore(false);
+    });
+
+    return () => controller.abort();
+  }, [debouncedQuery, fetchArticlePage]);
+
+  useEffect(() => {
+    if (!loadMoreRef.current || status !== "live" || !hasMoreArticles || isLoadingMore) {
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry.isIntersecting) {
+          return;
+        }
+
+        fetchArticlePage({ nextOffset: offset }).catch(() => {
+          setStatus("error");
+          setIsLoadingMore(false);
+        });
+      },
+      { rootMargin: "360px 0px" }
+    );
+    observer.observe(loadMoreRef.current);
+
+    return () => observer.disconnect();
+  }, [fetchArticlePage, hasMoreArticles, isLoadingMore, offset, status]);
 
   return (
     <main className="shell">
@@ -139,20 +275,20 @@ export default function DashboardPage() {
 
         <section className="metrics" aria-label="Article metrics">
           <article className="metric">
-            <span>Total Articles</span>
+            <span>Loaded Articles</span>
             <strong>{articles.length}</strong>
           </article>
           <article className="metric">
             <span>Sources</span>
-            <strong>{sourceCounts.size}</strong>
+            <strong>{enabledSources.length || sourceCounts.size}</strong>
           </article>
           <article className="metric">
             <span>Latest Signal</span>
             <strong>{newestArticle ? formatDate(newestArticle.published_at) : "-"}</strong>
           </article>
           <article className="metric">
-            <span>Visible</span>
-            <strong>{filteredArticles.length}</strong>
+            <span>Page Size</span>
+            <strong>{PAGE_SIZE}</strong>
           </article>
         </section>
 
@@ -166,6 +302,11 @@ export default function DashboardPage() {
                 placeholder="Company, sector, investor..."
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    setDebouncedQuery(query.trim());
+                  }
+                }}
               />
             </div>
             <div className="controlGroup">
@@ -176,9 +317,9 @@ export default function DashboardPage() {
                 onChange={(event) => setSource(event.target.value)}
               >
                 <option value="all">All sources</option>
-                {sources.map((item) => (
-                  <option key={item} value={item}>
-                    {sourceLabel(item)}
+                {enabledSources.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {sourceLabel(item.id)}
                   </option>
                 ))}
               </select>
@@ -186,12 +327,31 @@ export default function DashboardPage() {
             <button
               className="iconButton"
               type="button"
-              onClick={fetchArticles}
+              onClick={refreshDashboard}
               aria-label="Refresh articles"
               title="Refresh articles"
             >
               <span aria-hidden="true">↻</span>
             </button>
+          </div>
+          <div className="sourceChips" aria-label="Source filters">
+            <button
+              className={`sourceChip ${source === "all" ? "active" : ""}`}
+              type="button"
+              onClick={() => setSource("all")}
+            >
+              All
+            </button>
+            {enabledSources.map((item) => (
+              <button
+                className={`sourceChip ${source === item.id ? "active" : ""}`}
+                key={item.id}
+                type="button"
+                onClick={() => setSource(item.id)}
+              >
+                {sourceLabel(item.id)}
+              </button>
+            ))}
           </div>
 
           <div className="contentGrid">
@@ -213,12 +373,12 @@ export default function DashboardPage() {
                   </div>
                 ) : articles.length === 0 ? (
                   <div className="emptyState">
-                    No articles have been ingested yet. Run the ingester to populate the dashboard.
+                    {status === "loading"
+                      ? "Loading articles..."
+                      : "No articles match the current filters."}
                   </div>
-                ) : filteredArticles.length === 0 ? (
-                  <div className="emptyState">No articles match the current filters.</div>
                 ) : (
-                  filteredArticles.map((article) => (
+                  articles.map((article) => (
                     <article className="articleCard" key={article.id}>
                       <div className="articleMeta">
                         <span className="pill">{sourceLabel(article.source)}</span>
@@ -236,6 +396,25 @@ export default function DashboardPage() {
                     </article>
                   ))
                 )}
+              </div>
+              <div className="loadMoreArea" ref={loadMoreRef}>
+                {status === "live" && hasMoreArticles ? (
+                  <button
+                    className="loadMoreButton"
+                    type="button"
+                    disabled={isLoadingMore}
+                    onClick={() => {
+                      fetchArticlePage({ nextOffset: offset }).catch(() => {
+                        setStatus("error");
+                        setIsLoadingMore(false);
+                      });
+                    }}
+                  >
+                    {isLoadingMore ? "Loading more..." : "Load more articles"}
+                  </button>
+                ) : status === "live" && articles.length > 0 ? (
+                  <span className="endOfList">All matching articles loaded</span>
+                ) : null}
               </div>
             </section>
 

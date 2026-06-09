@@ -1,6 +1,6 @@
 # Frontend Architecture
 
-The frontend is a Next.js React dashboard website. It is intentionally focused on the operational workflow for Phase 1: showing the latest ingested startup funding articles, giving quick feed-level metrics, and allowing local filtering in the browser.
+The frontend is a Next.js React dashboard website. It is intentionally focused on the operational workflow for Phase 1: showing the latest ingested startup funding articles, giving quick feed-level metrics, and loading filtered article pages from the backend.
 
 ## Service Location
 
@@ -42,7 +42,7 @@ When the variable is missing, `page.tsx` falls back to `http://localhost:8000`.
 ## Technology Choices
 
 - Next.js App Router for application structure.
-- React client component for dashboard state and browser-side filtering.
+- React client component for dashboard state, server-side article filters, and infinite scrolling.
 - TypeScript for article API typing.
 - Plain global CSS for a small, focused UI surface.
 
@@ -57,7 +57,9 @@ Browser
 Next.js Dashboard
   |
   v
-fetch(`${NEXT_PUBLIC_API_BASE_URL}/articles?limit=100`)
+fetch(`${NEXT_PUBLIC_API_BASE_URL}/articles?limit=20&offset=0`)
+fetch(`${NEXT_PUBLIC_API_BASE_URL}/articles?limit=20&offset=20&source=...&q=...`)
+fetch(`${NEXT_PUBLIC_API_BASE_URL}/articles/sources`)
   |
   v
 FastAPI backend
@@ -66,7 +68,7 @@ FastAPI backend
 PostgreSQL articles table
 ```
 
-The dashboard fetches up to 100 articles and performs search, source filtering, source counts, and summary metrics in memory.
+The dashboard fetches source metadata from the backend and fetches articles in pages of 20. Source and search filters are sent to the backend with `source` and `q` query parameters. Scrolling near the end of the list requests the next page with `offset`; the Load More button remains available as a manual fallback. Source counts and summary metrics are calculated from the loaded article set.
 
 ## Main UI Areas
 
@@ -88,18 +90,18 @@ The top bar contains the dashboard title and a direct link to the backend API do
 
 The metric strip summarizes:
 
-- Total articles fetched by the dashboard.
+- Articles currently loaded by the dashboard.
 - Number of unique sources.
 - Latest published timestamp.
-- Number of articles visible after local filters.
+- Current article page size.
 
 ### Toolbar
 
 The toolbar contains:
 
-- Search input for title and content matching.
-- Source select filter.
-- Refresh button that re-fetches articles from the backend.
+- Search input for backend title and content matching.
+- Source select filter backed by the article API.
+- Refresh button that resets pagination and re-fetches articles from the backend.
 
 ### Article List
 
@@ -109,6 +111,7 @@ The article list shows:
 - Published timestamp.
 - Article title linked to the source URL.
 - Cleaned summary content from the RSS feed.
+- Infinite scrolling with a manual Load More fallback.
 
 ### Insights Panel
 
@@ -128,13 +131,15 @@ const [articles, setArticles] = useState<Article[]>([]);
 const [query, setQuery] = useState("");
 const [source, setSource] = useState("all");
 const [status, setStatus] = useState<"loading" | "live" | "error">("loading");
+const [offset, setOffset] = useState(0);
+const [hasMoreArticles, setHasMoreArticles] = useState(true);
+const [isLoadingMore, setIsLoadingMore] = useState(false);
 ```
 
 Derived data is computed with `useMemo`:
 
 - `sourceCounts`
 - `sources`
-- `filteredArticles`
 - `topSource`
 
 ## API Type
@@ -172,7 +177,7 @@ The dashboard handles:
 - Loading state while fetching articles.
 - Error state when the backend request fails.
 - Empty state when no articles have been ingested.
-- Empty filter state when local search or source filters hide all articles.
+- Empty filter state when backend search or source filters return no articles.
 
 ## Local Development
 
@@ -197,6 +202,6 @@ Good next frontend improvements:
 - Extract reusable components such as `MetricCard`, `ArticleCard`, `SourceFilter`, and `SignalsPanel`.
 - Add URL-synced filters.
 - Add server-side API proxy routes if the deployment topology requires hiding backend origins.
-- Add pagination once the API supports it beyond local fetching.
+- Add total result counts to the articles API if the dashboard needs full-dataset metrics.
 - Add source and date filters from backend query parameters.
 - Add visual regression coverage for the dashboard.

@@ -103,9 +103,10 @@ Creates the FastAPI app, configures CORS, registers API routes, and exposes `/he
 Defines article read endpoints:
 
 - `GET /articles`
+- `GET /articles/sources`
 - `GET /articles/{article_id}`
 
-The list endpoint applies `limit` and `offset`, with a maximum `limit` of `100`.
+The list endpoint applies `limit` and `offset`, with a maximum `limit` of `100`. It also supports optional `source`, `q`, `published_after`, and `published_before` filters.
 
 ### `app/core/config.py`
 
@@ -113,8 +114,12 @@ Loads environment-backed settings through Pydantic Settings:
 
 - `DATABASE_URL`
 - `CORS_ORIGINS`
+- `ENABLED_SOURCES`
+- `SOURCE_TIMEOUT_SECONDS`
+- `SOURCE_USER_AGENT`
 
 `CORS_ORIGINS` is parsed from a comma-separated string into a list for FastAPI CORS middleware.
+`ENABLED_SOURCES` is also comma-separated; leaving it empty enables every public source plugin.
 
 ### `app/db`
 
@@ -140,7 +145,11 @@ Defines the plugin base class and registry. Subclasses register themselves throu
 
 ### `app/ingestion/plugins/google_news.py`
 
-Fetches the Google News RSS search feed for `india startup funding`, parses it with `feedparser`, and maps entries into `RawArticle` objects.
+Fetches Google News RSS search feeds for funding and venture-capital queries, parses them with `feedparser`, and maps entries into `RawArticle` objects.
+
+### `app/ingestion/plugins/public_feeds.py`
+
+Fetches public RSS feeds and listing pages for Entrackr, Inc42, YourStory, and VCCircle. Each plugin keeps a source id and display name for API and dashboard usage.
 
 ### `app/ingestion/services/ingestion_service.py`
 

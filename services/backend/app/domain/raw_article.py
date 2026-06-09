@@ -9,3 +9,5 @@ class RawArticle:
     url: str
     published_at: datetime | None
     content: str | None
+    external_id: str | None = None
+    source_url: str | None = None

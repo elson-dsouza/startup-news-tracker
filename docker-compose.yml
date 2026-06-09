@@ -22,6 +22,9 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://startup_news:startup_news@postgres:5432/startup_news
       CORS_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
+      ENABLED_SOURCES: ""
+      SOURCE_TIMEOUT_SECONDS: "30"
+      SOURCE_USER_AGENT: StartupNewsTracker/1.0 (+https://localhost)
     ports:
       - "8000:8000"
     volumes:
@@ -36,6 +39,9 @@ services:
     command: python -m scripts.ingest --interval 3600
     environment:
       DATABASE_URL: postgresql+asyncpg://startup_news:startup_news@postgres:5432/startup_news
+      ENABLED_SOURCES: ""
+      SOURCE_TIMEOUT_SECONDS: "30"
+      SOURCE_USER_AGENT: StartupNewsTracker/1.0 (+https://localhost)
     volumes:
       - ./services/backend:/app
     depends_on:

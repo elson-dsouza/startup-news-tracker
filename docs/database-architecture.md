@@ -70,6 +70,8 @@ alembic upgrade head
 | `source` | varchar(255) | No | Source plugin identifier, currently `google_news`. |
 | `title` | varchar(1024) | No | Article title from the feed entry. |
 | `url` | varchar(2048) | No | Canonical source URL. Unique. |
+| `external_id` | varchar(512) | Yes | Source-specific feed id or guid when available. |
+| `source_url` | varchar(2048) | Yes | Feed/listing URL or pre-normalized source URL for traceability. |
 | `published_at` | timestamptz | Yes | Published or updated timestamp from the feed when available. |
 | `content` | text | Yes | RSS summary or content HTML/text when available. |
 | `created_at` | timestamptz | No | Insert timestamp, defaults to database `now()`. |
@@ -78,6 +80,8 @@ Constraints:
 
 - Primary key on `id`.
 - Unique constraint `uq_articles_url` on `url`.
+- Index `ix_articles_source` on `source`.
+- Index `ix_articles_published_at` on `published_at`.
 
 ## Logical Model
 
@@ -87,6 +91,8 @@ Article
   source: string
   title: string
   url: string
+  external_id: string | null
+  source_url: string | null
   published_at: datetime | null
   content: string | null
   created_at: datetime
@@ -122,17 +128,9 @@ and performs search and filtering in the browser.
 
 ## Indexing
 
-The current schema only defines primary key and unique URL indexes. This is enough for Phase 1 because the expected dataset is small.
+The schema defines primary key, unique URL, source, and published timestamp indexes. These support duplicate checks, source filters, and latest-article ordering.
 
-Recommended future indexes:
-
-```sql
-CREATE INDEX ix_articles_published_at ON articles (published_at DESC);
-CREATE INDEX ix_articles_source ON articles (source);
-CREATE INDEX ix_articles_created_at ON articles (created_at DESC);
-```
-
-Add these through Alembic when article volume or query patterns justify them.
+A future `created_at` index can be added if operational queries frequently sort or filter by ingestion time.
 
 ## Data Retention
 

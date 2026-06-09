@@ -228,7 +228,7 @@ dt,
   display: grid;
   grid-template-columns: minmax(220px, 1fr) 180px 40px;
   gap: 12px;
-  margin-bottom: 18px;
+  margin-bottom: 10px;
 }
 
 .searchBox,
@@ -255,6 +255,33 @@ select {
   height: 40px;
   cursor: pointer;
   font-size: 1.1rem;
+}
+
+.sourceChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.sourceChip {
+  min-height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+  padding: 0 10px;
+}
+
+.sourceChip.active,
+.sourceChip:hover {
+  border-color: var(--accent);
+  background: #ecfdf5;
+  color: var(--accent-strong);
 }
 
 .contentGrid {
@@ -396,6 +423,42 @@ dd {
   text-align: center;
 }
 
+.loadMoreArea {
+  display: flex;
+  justify-content: center;
+  min-height: 56px;
+  padding-top: 16px;
+}
+
+.loadMoreButton {
+  min-height: 40px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--ink);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 800;
+  padding: 0 16px;
+}
+
+.loadMoreButton:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent-strong);
+}
+
+.loadMoreButton:disabled {
+  cursor: progress;
+  opacity: 0.7;
+}
+
+.endOfList {
+  align-self: center;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
 @media (max-width: 900px) {
   .sidebar {
     position: static;
@@ -434,6 +497,10 @@ dd {
 
   .iconButton {
     width: 100%;
+  }
+
+  .sourceChip {
+    flex: 1 1 150px;
   }
 
   .metrics {

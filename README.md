@@ -97,10 +97,14 @@ Default values:
 ```env
 DATABASE_URL=postgresql+asyncpg://startup_news:startup_news@localhost:5432/startup_news
 CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
+ENABLED_SOURCES=
+SOURCE_TIMEOUT_SECONDS=30
+SOURCE_USER_AGENT=StartupNewsTracker/1.0 (+https://localhost)
 NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
 ```
 
 Docker Compose overrides the backend database host to `postgres` for containers.
+Leave `ENABLED_SOURCES` empty to run all public source plugins, or set a comma-separated list such as `google_news_funding,entrackr_funding`.
 
 ## Run The Full Project
 
@@ -154,6 +158,15 @@ docker compose up --build ingester
 ```
 
 The recurring interval defaults to `3600` seconds in `docker-compose.yml`.
+
+Current public source plugins:
+
+- `google_news_funding`
+- `google_news_venture_capital`
+- `entrackr_funding`
+- `inc42_india_funding`
+- `yourstory_startup_funding`
+- `vccircle_startup_funding`
 
 ## REST API
 
