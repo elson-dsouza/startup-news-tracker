@@ -137,7 +137,7 @@ To use a different file or alias, set `LLAMA_CPP_MODEL_FILE` and `LLAMA_CPP_MODE
 Manual equivalent for an 8 GB RAM machine:
 
 ```bash
-docker run --rm -p 8080:8080 -v "$PWD/models:/models:ro" ghcr.io/ggml-org/llama.cpp:server --model /models/qwen3-1.7b-q4_k_m.gguf --alias qwen3-1.7b --host 0.0.0.0 --port 8080 -c 4096 -np 1
+docker run --rm -p 8080:8080 -v "$PWD/models:/models:ro" ghcr.io/ggml-org/llama.cpp:server --model /models/qwen3-1.7b-q4_k_m.gguf --alias qwen3-1.7b --no-cache-prompt --cache-ram 0 --host 0.0.0.0 --port 8080 -c 4096 -np 1
 ```
 
 The default `qwen3-1.7b` alias is intentionally lightweight for constrained machines. If you have more RAM/VRAM, `qwen3-4b` is a better quality upgrade before trying `qwen3-8b`.

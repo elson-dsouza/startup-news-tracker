@@ -22,13 +22,19 @@ class ArticleQueue:
         *,
         url: str | None = None,
         queue_name: str | None = None,
+        dead_letter_queue_name: str | None = None,
         max_priority: int | None = None,
         prefetch_count: int | None = None,
+        max_attempts: int | None = None,
     ) -> None:
         self.url = url or settings.rabbitmq_url
         self.queue_name = queue_name or settings.article_queue_name
+        self.dead_letter_queue_name = (
+            dead_letter_queue_name or settings.article_queue_dead_letter_name
+        )
         self.max_priority = max_priority or settings.article_queue_max_priority
         self.prefetch_count = prefetch_count or settings.article_queue_prefetch_count
+        self.max_attempts = max_attempts or settings.article_queue_max_attempts
         self._connection: AbstractRobustConnection | None = None
 
     async def connect(self) -> None:
@@ -109,8 +115,9 @@ class ArticleQueue:
 
         if is_enriched:
             await message.ack()
-        else:
-            await message.ack()
+            return
+
+        await self._retry_or_dead_letter(message)
 
     async def _declare_queue(self, channel):
         return await channel.declare_queue(
@@ -118,6 +125,78 @@ class ArticleQueue:
             durable=True,
             arguments={"x-max-priority": self.max_priority},
         )
+
+    async def _retry_or_dead_letter(self, message: AbstractIncomingMessage) -> None:
+        attempts = _message_attempts(message) + 1
+        if attempts >= self.max_attempts:
+            await self._publish_dead_letter(message, attempts)
+            await message.ack()
+            logger.warning(
+                "Moved article message to %s after %s failed attempts",
+                self.dead_letter_queue_name,
+                attempts,
+            )
+            return
+
+        await self._republish_retry(message, attempts)
+        await message.ack()
+        await asyncio.sleep(settings.article_queue_retry_delay_seconds)
+
+    async def _republish_retry(
+        self, message: AbstractIncomingMessage, attempts: int
+    ) -> None:
+        assert self._connection is not None
+        channel = await self._connection.channel()
+        await self._declare_queue(channel)
+        try:
+            await channel.default_exchange.publish(
+                self._copy_message(message, attempts),
+                routing_key=self.queue_name,
+            )
+        finally:
+            await channel.close()
+
+    async def _publish_dead_letter(
+        self, message: AbstractIncomingMessage, attempts: int
+    ) -> None:
+        assert self._connection is not None
+        channel = await self._connection.channel()
+        await channel.declare_queue(
+            self.dead_letter_queue_name,
+            durable=True,
+            arguments={"x-max-priority": self.max_priority},
+        )
+        try:
+            await channel.default_exchange.publish(
+                self._copy_message(message, attempts),
+                routing_key=self.dead_letter_queue_name,
+            )
+        finally:
+            await channel.close()
+
+    @staticmethod
+    def _copy_message(
+        message: AbstractIncomingMessage,
+        attempts: int,
+    ) -> aio_pika.Message:
+        headers = dict(message.headers or {})
+        headers["attempts"] = attempts
+        return aio_pika.Message(
+            body=bytes(message.body),
+            content_type=message.content_type,
+            delivery_mode=aio_pika.DeliveryMode.PERSISTENT,
+            priority=message.priority,
+            timestamp=datetime.now(UTC),
+            headers=headers,
+        )
+
+
+def _message_attempts(message: AbstractIncomingMessage) -> int:
+    headers = message.headers or {}
+    try:
+        return int(headers.get("attempts") or 0)
+    except (TypeError, ValueError):
+        return 0
 
 
 def raw_article_to_message(article: RawArticle) -> dict[str, str | None]:

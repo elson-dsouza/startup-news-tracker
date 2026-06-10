@@ -39,6 +39,8 @@ services:
       - --alias
       - ${LLAMA_CPP_MODEL:-qwen3-1.7b}
       - --no-cache-prompt
+      - --cache-ram
+      - "0"
       - --host
       - 0.0.0.0
       - --port
@@ -51,6 +53,7 @@ services:
       - "8080:8080"
     volumes:
       - ./models:/models:ro
+    restart: unless-stopped
 
   backend-api:
     build:
@@ -75,6 +78,8 @@ services:
       ARTICLE_QUEUE_MAX_PRIORITY: "255"
       ARTICLE_QUEUE_PREFETCH_COUNT: "1"
       ARTICLE_QUEUE_RETRY_DELAY_SECONDS: "300"
+      ARTICLE_QUEUE_MAX_ATTEMPTS: "3"
+      ARTICLE_QUEUE_DEAD_LETTER_NAME: article.enrichment.failed
     ports:
       - "8000:8000"
     volumes:
@@ -98,6 +103,8 @@ services:
       RABBITMQ_URL: amqp://startup_news:startup_news@rabbitmq:5672/
       ARTICLE_QUEUE_NAME: article.enrichment
       ARTICLE_QUEUE_MAX_PRIORITY: "255"
+      ARTICLE_QUEUE_MAX_ATTEMPTS: "3"
+      ARTICLE_QUEUE_DEAD_LETTER_NAME: article.enrichment.failed
     volumes:
       - ./services/backend:/app
     depends_on:
@@ -127,6 +134,8 @@ services:
       ARTICLE_QUEUE_MAX_PRIORITY: "255"
       ARTICLE_QUEUE_PREFETCH_COUNT: "1"
       ARTICLE_QUEUE_RETRY_DELAY_SECONDS: "300"
+      ARTICLE_QUEUE_MAX_ATTEMPTS: "3"
+      ARTICLE_QUEUE_DEAD_LETTER_NAME: article.enrichment.failed
     volumes:
       - ./services/backend:/app
     depends_on:

@@ -25,6 +25,8 @@ class Settings(BaseSettings):
     article_queue_max_priority: int = 255
     article_queue_prefetch_count: int = 1
     article_queue_retry_delay_seconds: int = 300
+    article_queue_max_attempts: int = 3
+    article_queue_dead_letter_name: str = "article.enrichment.failed"
 
     @property
     def allowed_cors_origins(self) -> list[str]:
