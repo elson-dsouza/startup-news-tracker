@@ -88,6 +88,9 @@ def test_article_sources_endpoint_includes_database_sources(monkeypatch) -> None
 @pytest.mark.asyncio
 async def test_list_articles_accepts_multiple_sources() -> None:
     class FakeScalars:
+        def unique(self):
+            return self
+
         def all(self) -> list[object]:
             return []
 
@@ -110,6 +113,13 @@ async def test_list_articles_accepts_multiple_sources() -> None:
         offset=0,
         source=["expresshealthcare_in", "un_news"],
         q=None,
+        entity=None,
+        entity_type=None,
+        funding_min_usd=None,
+        funding_max_usd=None,
+        startup_country=None,
+        publisher_country=None,
+        mentioned_country=None,
         published_after=None,
         published_before=None,
         session=session,
@@ -118,3 +128,51 @@ async def test_list_articles_accepts_multiple_sources() -> None:
     compiled = str(session.statement.compile(compile_kwargs={"literal_binds": True}))
     assert "expresshealthcare_in" in compiled
     assert "un_news" in compiled
+
+
+@pytest.mark.asyncio
+async def test_list_articles_accepts_enrichment_filters() -> None:
+    class FakeScalars:
+        def unique(self):
+            return self
+
+        def all(self) -> list[object]:
+            return []
+
+    class FakeResult:
+        def scalars(self) -> FakeScalars:
+            return FakeScalars()
+
+    class FakeSession:
+        def __init__(self) -> None:
+            self.statement = None
+
+        async def execute(self, statement) -> FakeResult:
+            self.statement = statement
+            return FakeResult()
+
+    session = FakeSession()
+
+    await list_articles(
+        limit=20,
+        offset=0,
+        source=None,
+        q="fintech",
+        entity=["Acme Capital"],
+        entity_type=["investor"],
+        funding_min_usd=1000000,
+        funding_max_usd=5000000,
+        startup_country=["India"],
+        publisher_country=["United States"],
+        mentioned_country=None,
+        published_after=None,
+        published_before=None,
+        session=session,
+    )
+
+    compiled = str(session.statement.compile(compile_kwargs={"literal_binds": True}))
+    assert "article_enrichments" in compiled
+    assert "article_entities" in compiled
+    assert "funding_amount_usd" in compiled
+    assert "startup_country" in compiled
+    assert "publisher_country" in compiled

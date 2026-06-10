@@ -1,6 +1,6 @@
 # Frontend Architecture
 
-The frontend is a Next.js React dashboard website. It is intentionally focused on the operational workflow for Phase 1: showing the latest ingested startup funding articles, giving quick feed-level metrics, and loading filtered article pages from the backend.
+The frontend is a Next.js React dashboard website. It is focused on the operational workflow of browsing enriched startup funding articles, filtering by structured AI insights, and reading summaries without leaving the dashboard.
 
 ## Service Location
 
@@ -58,8 +58,9 @@ Next.js Dashboard
   |
   v
 fetch(`${NEXT_PUBLIC_API_BASE_URL}/articles?limit=20&offset=0`)
-fetch(`${NEXT_PUBLIC_API_BASE_URL}/articles?limit=20&offset=20&source=...&q=...`)
+fetch(`${NEXT_PUBLIC_API_BASE_URL}/articles?limit=20&offset=20&source=...&q=...&entity=...`)
 fetch(`${NEXT_PUBLIC_API_BASE_URL}/articles/sources`)
+fetch(`${NEXT_PUBLIC_API_BASE_URL}/articles/facets`)
   |
   v
 FastAPI backend
@@ -68,7 +69,7 @@ FastAPI backend
 PostgreSQL articles table
 ```
 
-The dashboard fetches source metadata from the backend and fetches articles in pages of 20. Source and search filters are sent to the backend with repeated `source` and `q` query parameters. Scrolling near the end of the list requests the next page with `offset`; the Load More button remains available as a manual fallback. Source counts and summary metrics are calculated from the loaded article set.
+The dashboard fetches source metadata and AI filter facets from the backend, then fetches articles in pages of 20. Source, search, entity, country, and funding filters are sent to the backend as query parameters. Scrolling near the end of the list requests the next page with `offset`; the Load More button remains available as a manual fallback. Source counts and summary metrics are calculated from the loaded article set.
 
 ## Main UI Areas
 
@@ -101,7 +102,10 @@ The toolbar contains:
 
 - Search input for backend title and content matching.
 - Dropdown checkbox source filter backed by the article API.
+- Entity type and entity filters backed by `/articles/facets`.
+- Startup country, publisher country, mentioned country, and funding range filters.
 - Refresh button that resets pagination and re-fetches articles from the backend.
+- Clear button for structured insight filters.
 
 ### Article List
 
@@ -110,7 +114,8 @@ The article list shows:
 - Source badge.
 - Published timestamp.
 - Article title linked to the source URL.
-- Cleaned summary content from the RSS feed.
+- AI-generated summary when available, with RSS content as fallback.
+- Funding, round, country, and entity chips when enrichment has completed.
 - Infinite scrolling with a manual Load More fallback.
 
 ### Insights Panel
@@ -129,7 +134,10 @@ The insights panel shows:
 ```ts
 const [articles, setArticles] = useState<Article[]>([]);
 const [query, setQuery] = useState("");
-const [source, setSource] = useState("all");
+const [selectedSources, setSelectedSources] = useState<string[]>([]);
+const [selectedEntity, setSelectedEntity] = useState("");
+const [startupCountry, setStartupCountry] = useState("");
+const [fundingMinUsd, setFundingMinUsd] = useState("");
 const [status, setStatus] = useState<"loading" | "live" | "error">("loading");
 const [offset, setOffset] = useState(0);
 const [hasMoreArticles, setHasMoreArticles] = useState(true);
@@ -154,6 +162,14 @@ type Article = {
   url: string;
   published_at: string | null;
   content: string | null;
+  summary: string | null;
+  entities: ArticleEntity[];
+  startup_country: string | null;
+  publisher_country: string | null;
+  mentioned_countries: string[];
+  funding_amount_usd: string | null;
+  funding_round: string | null;
+  enrichment_status: string;
   created_at: string;
 };
 ```

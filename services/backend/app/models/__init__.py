@@ -1,3 +1,15 @@
-from .article import Article, Base
+from .article import (
+    Article,
+    ArticleEnrichment,
+    ArticleEnrichmentJob,
+    ArticleEntity,
+    Base,
+)
 
-__all__ = ["Article", "Base"]
+__all__ = [
+    "Article",
+    "ArticleEnrichment",
+    "ArticleEnrichmentJob",
+    "ArticleEntity",
+    "Base",
+]

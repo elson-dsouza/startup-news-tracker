@@ -4,13 +4,13 @@ from typing import Iterable, List, Set
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.domain.raw_article import RawArticle
 from app.ingestion.plugins import load_plugins
 from app.ingestion.plugins.source_plugin import SourcePlugin
+from app.messaging.articles import ArticleQueue
 from app.models.article import Article
 
 logger = logging.getLogger(__name__)
@@ -23,8 +23,13 @@ MAX_EXTERNAL_ID_LENGTH = 512
 
 
 class IngestionService:
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(
+        self,
+        session: AsyncSession,
+        article_queue: ArticleQueue | None = None,
+    ) -> None:
         self.session = session
+        self.article_queue = article_queue or ArticleQueue()
 
     async def ingest(self) -> tuple[int, int]:
         load_plugins()
@@ -58,8 +63,8 @@ class IngestionService:
             article for article in unique_articles if article.url not in existing_urls
         ]
 
-        created_count = await self._store_articles(new_articles)
-        return created_count, len(raw_articles)
+        queued_count = await self._publish_articles(new_articles)
+        return queued_count, len(raw_articles)
 
     @staticmethod
     def source_metadata() -> list[dict[str, object]]:
@@ -124,30 +129,11 @@ class IngestionService:
         )
         return {row[0] for row in result.fetchall()}
 
-    async def _store_articles(self, raw_articles: List[RawArticle]) -> int:
+    async def _publish_articles(self, raw_articles: List[RawArticle]) -> int:
         if not raw_articles:
             return 0
 
-        articles = [
-            Article(
-                source=raw.source,
-                title=raw.title,
-                url=raw.url,
-                external_id=raw.external_id,
-                source_url=raw.source_url,
-                published_at=raw.published_at,
-                content=raw.content,
-            )
-            for raw in raw_articles
-        ]
-        self.session.add_all(articles)
-        try:
-            await self.session.commit()
-        except IntegrityError:
-            await self.session.rollback()
-            return 0
-
-        return len(articles)
+        return await self.article_queue.publish_articles(raw_articles)
 
     @staticmethod
     def _normalize_url(url: str) -> str:

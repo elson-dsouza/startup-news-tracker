@@ -120,13 +120,25 @@ async def test_ingest_continues_when_one_source_fails(monkeypatch) -> None:
         def add_all(self, articles) -> None:
             self.articles.extend(articles)
 
+        async def flush(self) -> None:
+            return None
+
         async def commit(self) -> None:
             return None
 
         async def rollback(self) -> None:
             return None
 
+    class FakeQueue:
+        def __init__(self) -> None:
+            self.published_articles = []
+
+        async def publish_articles(self, articles) -> int:
+            self.published_articles.extend(articles)
+            return len(articles)
+
     session = FakeSession()
+    queue = FakeQueue()
     monkeypatch.setattr(
         "app.ingestion.services.ingestion_service.load_plugins", lambda: None
     )
@@ -135,9 +147,13 @@ async def test_ingest_continues_when_one_source_fails(monkeypatch) -> None:
         lambda: [FailingPlugin, WorkingPlugin],
     )
 
-    created_count, fetched_count = await IngestionService(session).ingest()
+    created_count, fetched_count = await IngestionService(
+        session,
+        article_queue=queue,
+    ).ingest()
 
     assert created_count == 1
     assert fetched_count == 1
-    assert session.articles[0].source == "working_source"
-    assert session.articles[0].url == "https://example.com/funding"
+    assert session.articles == []
+    assert queue.published_articles[0].source == "working_source"
+    assert queue.published_articles[0].url == "https://example.com/funding"

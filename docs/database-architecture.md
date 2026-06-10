@@ -1,6 +1,6 @@
 # Database Architecture
 
-The database layer is PostgreSQL, managed through SQLAlchemy ORM models and Alembic migrations. Phase 1 stores a canonical article feed in a single table.
+The database layer is PostgreSQL, managed through SQLAlchemy ORM models and Alembic migrations. It stores canonical article feed rows plus enrichment records for extracted article text, AI summaries, entities, countries, and funding values.
 
 ## Runtime Database
 
@@ -96,6 +96,29 @@ Article
   published_at: datetime | null
   content: string | null
   created_at: datetime
+
+ArticleEnrichment
+  article_id: UUID
+  extraction_status: string
+  enrichment_status: string
+  full_text: string | null
+  summary: string | null
+  startup_country: string | null
+  publisher_country: string | null
+  mentioned_countries: string[] | null
+  funding_amount_original: string | null
+  funding_currency_original: string | null
+  funding_amount_usd: decimal | null
+  funding_round: string | null
+  model_name: string | null
+  generated_at: datetime | null
+
+ArticleEntity
+  id: UUID
+  article_id: UUID
+  entity_type: startup | investor | person
+  name: string
+  normalized_name: string
 ```
 
 ## Write Pattern
@@ -118,17 +141,20 @@ The API reads from the `articles` table and orders records by:
 1. `published_at DESC`
 2. `created_at DESC`
 
-The dashboard currently requests:
+The dashboard requests:
 
 ```text
-GET /articles?limit=100
+GET /articles?limit=20&offset=0
+GET /articles/facets
 ```
 
-and performs search and filtering in the browser.
+Search, source, entity, funding range, and country filters are applied by the backend so filtering works across the full dataset, not only the currently loaded page.
 
 ## Indexing
 
 The schema defines primary key, unique URL, source, and published timestamp indexes. These support duplicate checks, source filters, and latest-article ordering.
+
+Enrichment indexes cover enrichment status, startup country, publisher country, normalized USD funding amount, and typed entity name filters.
 
 A future `created_at` index can be added if operational queries frequently sort or filter by ingestion time.
 
@@ -150,7 +176,6 @@ Useful next tables as the product grows:
 
 - `sources`: source metadata, health, enabled status, polling interval.
 - `ingestion_runs`: started time, finished time, fetched count, created count, error details.
-- `article_entities`: companies, investors, founders, sectors, and locations extracted from article content.
 - `funding_rounds`: normalized amount, currency, round type, company, and investor fields.
 - `article_snapshots`: raw source payloads for traceability and reprocessing.
 

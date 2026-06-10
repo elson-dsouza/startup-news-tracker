@@ -7,6 +7,9 @@ pydantic-settings==2.14.1
 httpx==0.28.1
 feedparser==6.0.12
 PyYAML==6.0.2
+trafilatura==2.0.0
+aio-pika==9.5.8
+pycountry==24.6.1
 alembic==1.11.1
 pytest==9.0.3
 pytest-asyncio==1.4.0

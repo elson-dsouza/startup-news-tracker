@@ -1,15 +1,119 @@
 sources:
-  google_news_funding:
+  healthcare_startup_funding:
+    queries:
+      - healthtech startup funding
+      - healthcare startup raises funding
+      - digital health startup funding
+      - medtech startup funding
+      - biotech startup funding
+      - AI healthcare startup funding
+      - mental health startup funding
+      - healthcare startup seed funding
+      - healthcare startup series A
+      - healthcare startup venture funding
+
+  india_healthcare_startup_funding:
+    queries:
+      - healthtech startup funding india
+      - healthcare startup raises funding india
+      - digital health startup funding india
+      - medtech startup funding india
+      - AI healthcare startup funding india
+      - mental health startup funding india
+      - healthcare startup seed funding india
+      - healthcare startup series A india
+
+  un_multilateral_funding:
+    queries:
+      - UNICEF funding health
+      - UNICEF healthcare funding
+      - UNICEF innovation fund health
+      - UNICEF health innovation grant
+      - WHO healthcare funding
+      - WHO health innovation grant
+      - WHO digital health grant
+      - United Nations healthcare funding
+      - UNDP healthcare funding
+      - UNFPA health funding
+      - UNAIDS funding
+      - World Bank healthcare funding
+      - IFC healthcare investment
+      - Asian Development Bank healthcare funding
+
+  global_health_grants:
+    queries:
+      - healthcare grant
+      - health innovation grant
+      - digital health grant
+      - global health innovation funding
+      - public health innovation grant
+      - Gates Foundation healthcare grant
+      - Wellcome Trust health grant
+      - Rockefeller Foundation health funding
+      - maternal health grant
+      - child health grant
+
+  government_healthcare_funding:
     queries:
       - government healthcare funding
-      - healthcare funding india
-      - health innovation funding
-      - WHO grant
-      - United Nations healthcare funding
-      - seed funding india
-  google_news_venture_capital:
+      - public health funding
+      - healthcare budget allocation
+      - national health mission funding
+      - healthcare infrastructure funding
+      - digital health mission funding
+      - rural healthcare funding
+      - primary healthcare funding
+
+  india_government_healthcare_funding:
     queries:
-      - venture capital healthcare india
-      - seed funding healthcare india
+      - government healthcare funding india
+      - public health funding india
+      - healthcare budget allocation india
+      - National Health Mission funding
+      - Ayushman Bharat funding
+      - ABDM digital health funding
+      - BIRAC healthcare grant
+      - ICMR healthcare funding
+      - DBT healthcare innovation funding
+      - NITI Aayog healthcare innovation
+
+  healthcare_innovation_programs:
+    queries:
+      - healthcare innovation challenge
       - digital health innovation challenge
-      - series funding healthcare
+      - health innovation accelerator
+      - healthcare accelerator program
+      - hospital innovation program
+      - medtech innovation challenge
+      - public health innovation challenge
+      - AI healthcare innovation challenge
+
+  healthcare_vc_activity:
+    queries:
+      - healthcare venture capital
+      - healthtech venture capital
+      - healthcare VC investment
+      - healthtech investor backs startup
+      - healthcare investment fund
+      - digital health venture fund
+      - medtech venture capital
+      - biotech venture capital
+
+  healthcare_ai:
+    queries:
+      - AI healthcare funding
+      - AI diagnostics funding
+      - generative AI healthcare funding
+      - healthcare AI startup funding
+      - AI healthcare innovation grant
+      - AI drug discovery funding
+      - clinical AI funding
+
+  mental_health:
+    queries:
+      - mental health startup funding
+      - mental health innovation funding
+      - mental health grant
+      - behavioral health investment
+      - digital mental health funding
+      - mental health innovation challenge

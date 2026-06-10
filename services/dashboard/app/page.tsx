@@ -2,6 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+type ArticleEntity = {
+  entity_type: "startup" | "investor" | "person" | string;
+  name: string;
+  normalized_name: string;
+};
+
 type Article = {
   id: string;
   source: string;
@@ -12,6 +18,16 @@ type Article = {
   published_at: string | null;
   content: string | null;
   created_at: string;
+  summary: string | null;
+  entities: ArticleEntity[];
+  startup_country: string | null;
+  publisher_country: string | null;
+  mentioned_countries: string[];
+  funding_amount_usd: string | null;
+  funding_amount_original: string | null;
+  funding_currency_original: string | null;
+  funding_round: string | null;
+  enrichment_status: string;
 };
 
 type ArticleSource = {
@@ -19,6 +35,23 @@ type ArticleSource = {
   display_name: string;
   enabled: boolean;
   latest_article_at: string | null;
+};
+
+type ArticleFacetEntity = ArticleEntity & {
+  count: number;
+};
+
+type ArticleFacets = {
+  entities: ArticleFacetEntity[];
+  countries: {
+    startup: string[];
+    publisher: string[];
+    mentioned: string[];
+  };
+  funding: {
+    min_usd: string | null;
+    max_usd: string | null;
+  };
 };
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
@@ -45,11 +78,27 @@ function fallbackSourceLabel(source: string) {
 
 function summarize(value: string | null) {
   if (!value) {
-    return "Raw feed item stored without summary content.";
+    return "Summary pending enrichment.";
   }
 
   const cleanText = value.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
-  return cleanText.length > 180 ? `${cleanText.slice(0, 177)}...` : cleanText;
+  return cleanText.length > 220 ? `${cleanText.slice(0, 217)}...` : cleanText;
+}
+
+function formatFunding(article: Article) {
+  if (article.funding_amount_usd) {
+    const amount = Number(article.funding_amount_usd);
+    if (Number.isFinite(amount)) {
+      return new Intl.NumberFormat("en-US", {
+        style: "currency",
+        currency: "USD",
+        maximumFractionDigits: 0,
+        notation: amount >= 1_000_000 ? "compact" : "standard"
+      }).format(amount);
+    }
+  }
+
+  return article.funding_amount_original;
 }
 
 function countBySource(articles: Article[]) {
@@ -62,9 +111,17 @@ function countBySource(articles: Article[]) {
 export default function DashboardPage() {
   const [articles, setArticles] = useState<Article[]>([]);
   const [sourceOptions, setSourceOptions] = useState<ArticleSource[]>([]);
+  const [facets, setFacets] = useState<ArticleFacets | null>(null);
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [selectedSources, setSelectedSources] = useState<string[]>([]);
+  const [selectedEntity, setSelectedEntity] = useState("");
+  const [selectedEntityType, setSelectedEntityType] = useState("");
+  const [startupCountry, setStartupCountry] = useState("");
+  const [publisherCountry, setPublisherCountry] = useState("");
+  const [mentionedCountry, setMentionedCountry] = useState("");
+  const [fundingMinUsd, setFundingMinUsd] = useState("");
+  const [fundingMaxUsd, setFundingMaxUsd] = useState("");
   const [isSourceDropdownOpen, setIsSourceDropdownOpen] = useState(false);
   const [status, setStatus] = useState<"loading" | "live" | "error">("loading");
   const [offset, setOffset] = useState(0);
@@ -88,6 +145,14 @@ export default function DashboardPage() {
     () => sourceOptions.filter((item) => item.enabled),
     [sourceOptions]
   );
+  const filteredEntityFacets = useMemo(() => {
+    if (!facets) {
+      return [];
+    }
+    return selectedEntityType
+      ? facets.entities.filter((item) => item.entity_type === selectedEntityType)
+      : facets.entities;
+  }, [facets, selectedEntityType]);
 
   function sourceLabel(sourceId: string) {
     return sourceLabels.get(sourceId) ?? fallbackSourceLabel(sourceId);
@@ -99,6 +164,16 @@ export default function DashboardPage() {
         ? currentSources.filter((item) => item !== sourceId)
         : [...currentSources, sourceId]
     );
+  }
+
+  function resetInsightFilters() {
+    setSelectedEntity("");
+    setSelectedEntityType("");
+    setStartupCountry("");
+    setPublisherCountry("");
+    setMentionedCountry("");
+    setFundingMinUsd("");
+    setFundingMaxUsd("");
   }
 
   const selectedSourceSummary = useMemo(() => {
@@ -118,8 +193,12 @@ export default function DashboardPage() {
     [sourceCounts]
   );
   const newestArticle = articles[0];
-  const contentCoverage = articles.length
-    ? Math.round((articles.filter((article) => article.content).length / articles.length) * 100)
+  const enrichedCoverage = articles.length
+    ? Math.round(
+        (articles.filter((article) => article.enrichment_status === "enriched").length /
+          articles.length) *
+          100
+      )
     : 0;
   const maxSourceCount = Math.max(...[...sourceCounts.values()], 1);
 
@@ -152,6 +231,27 @@ export default function DashboardPage() {
       if (debouncedQuery.trim()) {
         params.set("q", debouncedQuery.trim());
       }
+      if (selectedEntity) {
+        params.set("entity", selectedEntity);
+      }
+      if (selectedEntityType) {
+        params.set("entity_type", selectedEntityType);
+      }
+      if (startupCountry) {
+        params.set("startup_country", startupCountry);
+      }
+      if (publisherCountry) {
+        params.set("publisher_country", publisherCountry);
+      }
+      if (mentionedCountry) {
+        params.set("mentioned_country", mentionedCountry);
+      }
+      if (fundingMinUsd) {
+        params.set("funding_min_usd", fundingMinUsd);
+      }
+      if (fundingMaxUsd) {
+        params.set("funding_max_usd", fundingMaxUsd);
+      }
 
       const response = await fetch(`${API_BASE_URL}/articles?${params.toString()}`, {
         cache: "no-store",
@@ -178,7 +278,17 @@ export default function DashboardPage() {
       setStatus("live");
       setIsLoadingMore(false);
     },
-    [debouncedQuery, selectedSources]
+    [
+      debouncedQuery,
+      fundingMaxUsd,
+      fundingMinUsd,
+      mentionedCountry,
+      publisherCountry,
+      selectedEntity,
+      selectedEntityType,
+      selectedSources,
+      startupCountry
+    ]
   );
 
   async function fetchSources() {
@@ -191,10 +301,24 @@ export default function DashboardPage() {
     setSourceOptions(await response.json());
   }
 
+  async function fetchFacets() {
+    const response = await fetch(`${API_BASE_URL}/articles/facets`, {
+      cache: "no-store"
+    });
+    if (!response.ok) {
+      throw new Error(`Facets request failed with ${response.status}`);
+    }
+    setFacets(await response.json());
+  }
+
   async function refreshDashboard() {
     setStatus("loading");
     try {
-      await Promise.all([fetchSources(), fetchArticlePage({ nextOffset: 0, reset: true })]);
+      await Promise.all([
+        fetchSources(),
+        fetchFacets(),
+        fetchArticlePage({ nextOffset: 0, reset: true })
+      ]);
       setStatus("live");
     } catch {
       setStatus("error");
@@ -203,7 +327,7 @@ export default function DashboardPage() {
   }
 
   useEffect(() => {
-    fetchSources().catch(() => setStatus("error"));
+    Promise.all([fetchSources(), fetchFacets()]).catch(() => setStatus("error"));
   }, []);
 
   useEffect(() => {
@@ -245,7 +369,7 @@ export default function DashboardPage() {
     });
 
     return () => controller.abort();
-  }, [debouncedQuery, fetchArticlePage]);
+  }, [fetchArticlePage]);
 
   useEffect(() => {
     if (!loadMoreRef.current || status !== "live" || !hasMoreArticles || isLoadingMore) {
@@ -286,23 +410,23 @@ export default function DashboardPage() {
           <a className="navItem active" href="#articles">
             Articles
           </a>
+          <a className="navItem" href="#filters">
+            Filters
+          </a>
           <a className="navItem" href="#signals">
             Signals
           </a>
-          <a className="navItem" href="#sources">
-            Sources
-          </a>
         </nav>
         <div className="sidebarPanel">
-          <span>RSS query</span>
-          <strong>india startup funding</strong>
+          <span>AI runtime</span>
+          <strong>llama.cpp qwen3-1.7b</strong>
         </div>
       </aside>
 
       <section className="page">
         <header className="topbar">
           <div>
-            <p className="eyebrow">Phase 1 Intelligence Intake</p>
+            <p className="eyebrow">Phase 2 Intelligence Intake</p>
             <h1>Startup Funding Dashboard</h1>
           </div>
           <a className="primaryAction" href={`${API_BASE_URL}/docs`}>
@@ -324,13 +448,13 @@ export default function DashboardPage() {
             <strong>{newestArticle ? formatDate(newestArticle.published_at) : "-"}</strong>
           </article>
           <article className="metric">
-            <span>Page Size</span>
-            <strong>{PAGE_SIZE}</strong>
+            <span>AI Coverage</span>
+            <strong>{articles.length ? `${enrichedCoverage}%` : "-"}</strong>
           </article>
         </section>
 
         <section className="workspace" id="articles">
-          <div className="toolbar">
+          <div className="toolbar" id="filters">
             <div className="searchBox">
               <label htmlFor="searchInput">Search</label>
               <input
@@ -358,7 +482,7 @@ export default function DashboardPage() {
                   onClick={() => setIsSourceDropdownOpen((isOpen) => !isOpen)}
                 >
                   <span>{selectedSourceSummary}</span>
-                  <span aria-hidden="true">▾</span>
+                  <span aria-hidden="true">v</span>
                 </button>
                 {isSourceDropdownOpen && (
                   <div
@@ -388,6 +512,109 @@ export default function DashboardPage() {
                 )}
               </div>
             </div>
+            <div className="controlGroup">
+              <label htmlFor="entityTypeFilter">Entity Type</label>
+              <select
+                id="entityTypeFilter"
+                value={selectedEntityType}
+                onChange={(event) => {
+                  setSelectedEntityType(event.target.value);
+                  setSelectedEntity("");
+                }}
+              >
+                <option value="">All entity types</option>
+                <option value="startup">Startup</option>
+                <option value="investor">Investor</option>
+                <option value="person">Person</option>
+              </select>
+            </div>
+            <div className="controlGroup">
+              <label htmlFor="entityFilter">Entity</label>
+              <select
+                id="entityFilter"
+                value={selectedEntity}
+                onChange={(event) => setSelectedEntity(event.target.value)}
+              >
+                <option value="">All entities</option>
+                {filteredEntityFacets.map((item) => (
+                  <option
+                    key={`${item.entity_type}:${item.normalized_name}`}
+                    value={item.normalized_name}
+                  >
+                    {item.name} ({item.count})
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="controlGroup">
+              <label htmlFor="startupCountryFilter">Startup Country</label>
+              <select
+                id="startupCountryFilter"
+                value={startupCountry}
+                onChange={(event) => setStartupCountry(event.target.value)}
+              >
+                <option value="">Any startup country</option>
+                {facets?.countries.startup.map((country) => (
+                  <option key={country} value={country}>
+                    {country}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="controlGroup">
+              <label htmlFor="publisherCountryFilter">Publisher Country</label>
+              <select
+                id="publisherCountryFilter"
+                value={publisherCountry}
+                onChange={(event) => setPublisherCountry(event.target.value)}
+              >
+                <option value="">Any publisher country</option>
+                {facets?.countries.publisher.map((country) => (
+                  <option key={country} value={country}>
+                    {country}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="controlGroup">
+              <label htmlFor="mentionedCountryFilter">Mentioned Country</label>
+              <select
+                id="mentionedCountryFilter"
+                value={mentionedCountry}
+                onChange={(event) => setMentionedCountry(event.target.value)}
+              >
+                <option value="">Any mentioned country</option>
+                {facets?.countries.mentioned.map((country) => (
+                  <option key={country} value={country}>
+                    {country}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="fundingControls">
+              <div className="controlGroup">
+                <label htmlFor="fundingMinFilter">Min USD</label>
+                <input
+                  id="fundingMinFilter"
+                  min="0"
+                  placeholder={facets?.funding.min_usd ?? "0"}
+                  type="number"
+                  value={fundingMinUsd}
+                  onChange={(event) => setFundingMinUsd(event.target.value)}
+                />
+              </div>
+              <div className="controlGroup">
+                <label htmlFor="fundingMaxFilter">Max USD</label>
+                <input
+                  id="fundingMaxFilter"
+                  min="0"
+                  placeholder={facets?.funding.max_usd ?? "No max"}
+                  type="number"
+                  value={fundingMaxUsd}
+                  onChange={(event) => setFundingMaxUsd(event.target.value)}
+                />
+              </div>
+            </div>
             <button
               className="iconButton"
               type="button"
@@ -396,6 +623,13 @@ export default function DashboardPage() {
               title="Refresh articles"
             >
               <span aria-hidden="true">↻</span>
+            </button>
+            <button
+              className="secondaryButton"
+              type="button"
+              onClick={resetInsightFilters}
+            >
+              Clear
             </button>
           </div>
 
@@ -423,23 +657,64 @@ export default function DashboardPage() {
                       : "No articles match the current filters."}
                   </div>
                 ) : (
-                  articles.map((article) => (
-                    <article className="articleCard" key={article.id}>
-                      <div className="articleMeta">
-                        <span className="pill">{sourceLabel(article.source)}</span>
-                        <span>{formatDate(article.published_at)}</span>
-                      </div>
-                      <a
-                        className="articleTitle"
-                        href={article.url}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        {article.title}
-                      </a>
-                      <p className="articleSummary">{summarize(article.content)}</p>
-                    </article>
-                  ))
+                  articles.map((article) => {
+                    const funding = formatFunding(article);
+                    return (
+                      <article className="articleCard" key={article.id}>
+                        <div className="articleMeta">
+                          <span className="pill">{sourceLabel(article.source)}</span>
+                          <span>{formatDate(article.published_at)}</span>
+                          <span className={`statusText ${article.enrichment_status}`}>
+                            {article.enrichment_status}
+                          </span>
+                        </div>
+                        <a
+                          className="articleTitle"
+                          href={article.url}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          {article.title}
+                        </a>
+                        <p className="articleSummary">
+                          {article.summary ?? summarize(article.content)}
+                        </p>
+                        <div className="chipRow">
+                          {funding && <span className="insightChip funding">{funding}</span>}
+                          {article.funding_round && (
+                            <span className="insightChip">{article.funding_round}</span>
+                          )}
+                          {article.startup_country && (
+                            <span className="insightChip">
+                              Startup: {article.startup_country}
+                            </span>
+                          )}
+                          {article.publisher_country && (
+                            <span className="insightChip">
+                              Publisher: {article.publisher_country}
+                            </span>
+                          )}
+                          {article.mentioned_countries.slice(0, 3).map((country) => (
+                            <span className="insightChip" key={country}>
+                              {country}
+                            </span>
+                          ))}
+                        </div>
+                        {article.entities.length > 0 && (
+                          <div className="entityList">
+                            {article.entities.slice(0, 8).map((entity) => (
+                              <span
+                                className={`entityChip ${entity.entity_type}`}
+                                key={`${entity.entity_type}:${entity.normalized_name}`}
+                              >
+                                {entity.name}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </article>
+                    );
+                  })
                 )}
               </div>
               <div className="loadMoreArea" ref={loadMoreRef}>
@@ -480,8 +755,8 @@ export default function DashboardPage() {
                   <dd>{newestArticle ? formatDate(newestArticle.published_at) : "-"}</dd>
                 </div>
                 <div>
-                  <dt>Content coverage</dt>
-                  <dd>{articles.length ? `${contentCoverage}%` : "-"}</dd>
+                  <dt>AI enriched loaded</dt>
+                  <dd>{articles.length ? `${enrichedCoverage}%` : "-"}</dd>
                 </div>
               </dl>
 
